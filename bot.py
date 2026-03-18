@@ -51,7 +51,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     kb = InlineKeyboardBuilder()
     kb.button(text="📊 Пройти тест", callback_data="start_quiz")
-    kb.button(text="💬 Написать специалисту", url="https://t.me/ТВОЙ_ЮЗЕРНЕЙМ")
+    kb.button(text="💬 Написать специалисту", url="https://t.me/gunintherapy")
     kb.adjust(1)
 
     await message.answer(
