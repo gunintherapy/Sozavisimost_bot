@@ -71,6 +71,17 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 @dp.message(Command("quiz"))
 async def start_quiz(message: types.Message, state: FSMContext):
+    @dp.callback_query(F.data == "start_quiz")
+async def start_quiz_callback(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(QuizStates.question_idx)
+    await state.update_data(question_idx=0, scores=0)
+
+    await callback.message.edit_text(
+        f"Вопрос 1: {QUESTIONS[0]}",
+        reply_markup=get_quiz_keyboard()
+    )
+
+    await callback.answer()
     await state.set_state(QuizStates.question_idx)
     await state.update_data(question_idx=0, scores=0)
     await message.answer(f"Вопрос 1: {QUESTIONS[0]}", reply_markup=get_quiz_keyboard())
