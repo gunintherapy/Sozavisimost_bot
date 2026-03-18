@@ -48,12 +48,26 @@ def get_quiz_keyboard():
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
-    welcome_text = (
-        "👋 Здравствуйте! Этот тест поможет вам оценить уровень созависимости.\n\n"
-        "Вам будет предложено 16 утверждений. Оцените их от **1** (не согласен) до **6** (полностью согласен).\n"
-        "Нажмите /quiz, чтобы начать."
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📊 Пройти тест", callback_data="start_quiz")
+    kb.button(text="💬 Написать специалисту", url="https://t.me/ТВОЙ_ЮЗЕРНЕЙМ")
+    kb.adjust(1)
+
+    await message.answer(
+        "Ты живёшь чужой жизнью.\n\n"
+        "Пытаешься помочь, спасти, контролировать...\n"
+        "А в итоге — теряешь себя.\n\n"
+        "Это не просто забота.\n"
+        "Это созависимость.\n\n"
+        "👇 Ниже будет тест из 16 вопросов\n\n"
+        "Оцени каждое утверждение:\n\n"
+        "1 — совсем не про меня\n"
+        "6 — полностью про меня\n\n"
+        "Отвечай честно. Здесь нет правильных ответов.\n\n"
+        "Готов начать?",
+        reply_markup=kb.as_markup()
     )
-    await message.answer(welcome_text)
 
 @dp.message(Command("quiz"))
 async def start_quiz(message: types.Message, state: FSMContext):
