@@ -6,19 +6,23 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-# Токен твоего бота от BotFather
+# Токен от BotFather
 TOKEN = "8562139672:AAGYRcU2lwFwWc8tLjHNbOfuIHaCu7cc9rc"
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
+# -----------------------
 # Состояния для теста
+# -----------------------
 class QuizStates(StatesGroup):
     question_idx = State()  # Номер текущего вопроса
     scores = State()        # Накопленные баллы
 
-# Список вопросов Шкалы Спанн-Фишер
+# -----------------------
+# Список вопросов
+# -----------------------
 QUESTIONS = [
     "Мне трудно принимать решения.",
     "Мне трудно сказать «нет» тем, кто просит меня о помощи.",
@@ -38,13 +42,19 @@ QUESTIONS = [
     "Я чувствую, что должен всё контролировать для безопасности."
 ]
 
+# -----------------------
+# Клавиатура оценок 1-6
+# -----------------------
 def get_quiz_keyboard():
     builder = InlineKeyboardBuilder()
     for i in range(1, 7):
         builder.button(text=str(i), callback_data=f"score_{i}")
-    builder.adjust(3) # Кнопки в два ряда по 3 штуки
+    builder.adjust(3)  # 3 кнопки в ряд
     return builder.as_markup()
 
+# -----------------------
+# Стартовое сообщение /start
+# -----------------------
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -61,7 +71,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         "Это не просто забота.\n"
         "Это созависимость.\n\n"
         "👇 Ниже будет тест из 16 вопросов\n\n"
-        "Оцени каждое утверждение:\n\n"
+        "Оцени каждое утверждение:\n"
         "1 — совсем не про меня\n"
         "6 — полностью про меня\n\n"
         "Отвечай честно. Здесь нет правильных ответов.\n\n"
@@ -69,69 +79,86 @@ async def cmd_start(message: types.Message, state: FSMContext):
         reply_markup=kb.as_markup()
     )
 
+# -----------------------
+# Начало теста через команду /quiz
+# -----------------------
 @dp.message(Command("quiz"))
 async def start_quiz(message: types.Message, state: FSMContext):
     await state.set_state(QuizStates.question_idx)
     await state.update_data(question_idx=0, scores=0)
+    await send_question(message, 0)
 
-    await message.answer(
-        f"Вопрос 1: {QUESTIONS[0]}",
-        reply_markup=get_quiz_keyboard()
-    )
-
-
+# -----------------------
+# Начало теста через кнопку "Пройти тест"
+# -----------------------
 @dp.callback_query(F.data == "start_quiz")
 async def start_quiz_callback(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(QuizStates.question_idx)
     await state.update_data(question_idx=0, scores=0)
+    await send_question(callback.message, 0)
+    await callback.answer()
 
-    await callback.message.answer(
-        f"Вопрос 1: {QUESTIONS[0]}",
+# -----------------------
+# Универсальная функция отправки вопроса
+# -----------------------
+async def send_question(message_or_callback, question_idx: int):
+    await message_or_callback.answer(
+        f"Вопрос {question_idx + 1}: {QUESTIONS[question_idx]}",
         reply_markup=get_quiz_keyboard()
     )
 
-    await callback.answer()
-    )
-
-    await callback.answer()
-    await state.set_state(QuizStates.question_idx)
-    await state.update_data(question_idx=0, scores=0)
-    await message.answer(f"Вопрос 1: {QUESTIONS[0]}", reply_markup=get_quiz_keyboard())
-
+# -----------------------
+# Обработка ответа на вопрос
+# -----------------------
 @dp.callback_query(F.data.startswith("score_"))
 async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    q_idx = data['question_idx']
-    current_scores = data['scores']
-    
-    # Прибавляем балл из callback_data
+    q_idx = data.get('question_idx', 0)
+    current_scores = data.get('scores', 0)
+
+    # Получаем балл из callback_data
     score = int(callback.data.split("_")[1])
     new_scores = current_scores + score
     next_q_idx = q_idx + 1
 
     if next_q_idx < len(QUESTIONS):
-        # Переход к следующему вопросу
+        # Следующий вопрос
         await state.update_data(question_idx=next_q_idx, scores=new_scores)
         await callback.message.edit_text(
             f"Вопрос {next_q_idx + 1}: {QUESTIONS[next_q_idx]}",
             reply_markup=get_quiz_keyboard()
         )
     else:
-        # Финал теста
+        # Финал теста с кнопкой "Пройти тест снова"
         result_text = get_interpretation(new_scores)
-        await callback.message.edit_text(f"Тест завершен!\n\nВаш результат: {new_scores} баллов.\n\n{result_text}")
+
+        kb = InlineKeyboardBuilder()
+        kb.button(text="📊 Пройти тест снова", callback_data="start_quiz")
+        kb.adjust(1)
+
+        await callback.message.edit_text(
+            f"Тест завершен!\n\nВаш результат: {new_scores} баллов.\n\n{result_text}\n\n"
+            "Если хотите пройти тест заново, нажмите кнопку ниже.",
+            reply_markup=kb.as_markup()
+        )
         await state.clear()
-    
+
     await callback.answer()
 
-def get_interpretation(score):
+# -----------------------
+# Интерпретация результата
+# -----------------------
+def get_interpretation(score: int) -> str:
     if 16 <= score <= 34:
-        return "🟢 **Низкий уровень созависимости.** Вы обладаете здоровыми границами."
+        return "🟢 Низкий уровень созависимости. Вы обладаете здоровыми границами."
     elif 35 <= score <= 55:
-        return "🟡 **Средний уровень созависимости.** Есть склонность забывать о своих интересах."
+        return "🟡 Средний уровень созависимости. Есть склонность забывать о своих интересах."
     else:
-        return "🔴 **Высокий уровень созависимости.** Рекомендуется обратить внимание на свои границы или обратиться к психологу."
+        return "🔴 Высокий уровень созависимости. Рекомендуется обратить внимание на свои границы или обратиться к психологу."
 
+# -----------------------
+# Запуск бота
+# -----------------------
 async def main():
     await dp.start_polling(bot)
 
