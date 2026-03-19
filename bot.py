@@ -1,27 +1,29 @@
 import asyncio
 import logging
+import os
+
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-# Токен от BotFather
-TOKEN = "8562139672:AAGYRcU2lwFwWc8tLjHNbOfuIHaCu7cc9rc"
+# Токен (берется из Railway)
+TOKEN = os.getenv("TOKEN")
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 # -----------------------
-# Состояния для теста
+# Состояния
 # -----------------------
 class QuizStates(StatesGroup):
-    question_idx = State()  # Номер текущего вопроса
-    scores = State()        # Накопленные баллы
+    question_idx = State()
+    scores = State()
 
 # -----------------------
-# Список вопросов
+# Вопросы
 # -----------------------
 QUESTIONS = [
     "Мне трудно принимать решения.",
@@ -43,17 +45,17 @@ QUESTIONS = [
 ]
 
 # -----------------------
-# Клавиатура оценок 1-6
+# Клавиатура
 # -----------------------
 def get_quiz_keyboard():
     builder = InlineKeyboardBuilder()
     for i in range(1, 7):
         builder.button(text=str(i), callback_data=f"score_{i}")
-    builder.adjust(3)  # 3 кнопки в ряд
+    builder.adjust(3)
     return builder.as_markup()
 
 # -----------------------
-# Стартовое сообщение /start
+# /start
 # -----------------------
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
@@ -61,7 +63,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     kb = InlineKeyboardBuilder()
     kb.button(text="📊 Пройти тест", callback_data="start_quiz")
-    kb.button(text="💬 Написать специалисту", url="https://t.me/gunintherapy")
+    kb.button(text="💬 Написать специалисту", url="https://t.me/voshodkrsk")
     kb.adjust(1)
 
     await message.answer(
@@ -80,35 +82,22 @@ async def cmd_start(message: types.Message, state: FSMContext):
     )
 
 # -----------------------
-# Начало теста через команду /quiz
-# -----------------------
-@dp.message(Command("quiz"))
-async def start_quiz(message: types.Message, state: FSMContext):
-    await state.set_state(QuizStates.question_idx)
-    await state.update_data(question_idx=0, scores=0)
-    await send_question(message, 0)
-
-# -----------------------
-# Начало теста через кнопку "Пройти тест"
+# Старт теста через кнопку
 # -----------------------
 @dp.callback_query(F.data == "start_quiz")
-async def start_quiz_callback(callback: types.CallbackQuery, state: FSMContext):
+async def start_quiz(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(QuizStates.question_idx)
     await state.update_data(question_idx=0, scores=0)
-    await send_question(callback.message, 0)
-    await callback.answer()
 
-# -----------------------
-# Универсальная функция отправки вопроса
-# -----------------------
-async def send_question(message_or_callback, question_idx: int):
-    await message_or_callback.answer(
-        f"Вопрос {question_idx + 1}: {QUESTIONS[question_idx]}",
+    await callback.message.answer(
+        f"Вопрос 1: {QUESTIONS[0]}",
         reply_markup=get_quiz_keyboard()
     )
 
+    await callback.answer()
+
 # -----------------------
-# Обработка ответа на вопрос
+# Ответы
 # -----------------------
 @dp.callback_query(F.data.startswith("score_"))
 async def process_answer(callback: types.CallbackQuery, state: FSMContext):
@@ -116,48 +105,76 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     q_idx = data.get('question_idx', 0)
     current_scores = data.get('scores', 0)
 
-    # Получаем балл из callback_data
     score = int(callback.data.split("_")[1])
     new_scores = current_scores + score
     next_q_idx = q_idx + 1
 
     if next_q_idx < len(QUESTIONS):
-        # Следующий вопрос
         await state.update_data(question_idx=next_q_idx, scores=new_scores)
+
         await callback.message.edit_text(
             f"Вопрос {next_q_idx + 1}: {QUESTIONS[next_q_idx]}",
             reply_markup=get_quiz_keyboard()
         )
+
     else:
-        # Финал теста с кнопкой "Пройти тест снова"
         result_text = get_interpretation(new_scores)
 
         kb = InlineKeyboardBuilder()
-        kb.button(text="📊 Пройти тест снова", callback_data="start_quiz")
+        kb.button(
+            text="💬 Разобрать мою ситуацию",
+            url="https://t.me/gunintherapy"
+        )
+        kb.button(
+            text="📊 Пройти тест снова",
+            callback_data="start_quiz"
+        )
         kb.adjust(1)
 
         await callback.message.edit_text(
-            f"Тест завершен!\n\nВаш результат: {new_scores} баллов.\n\n{result_text}\n\n"
-            "Если хотите пройти тест заново, нажмите кнопку ниже.",
+            f"Тест завершен!\n\n"
+            f"Ваш результат: {new_scores} баллов.\n\n"
+            f"{result_text}\n\n"
+            f"👉 Это не просто цифры.\n"
+            f"Это модель поведения, которая влияет на твою жизнь.\n\n"
+            f"Напиши мне в личку:\n"
+            f"👉 Я из бота\n\n"
+            f"Я задам пару вопросов и скажу, что с этим делать.",
             reply_markup=kb.as_markup()
         )
+
         await state.clear()
 
     await callback.answer()
 
 # -----------------------
-# Интерпретация результата
+# Интерпретация
 # -----------------------
 def get_interpretation(score: int) -> str:
     if 16 <= score <= 34:
-        return "🟢 Низкий уровень созависимости. Вы обладаете здоровыми границами."
+        return (
+            "🟢 У тебя пока есть опора на себя.\n\n"
+            "Но будь внимателен — созависимость подкрадывается незаметно."
+        )
+
     elif 35 <= score <= 55:
-        return "🟡 Средний уровень созависимости. Есть склонность забывать о своих интересах."
+        return (
+            "🟡 Ты уже начинаешь терять себя.\n\n"
+            "Чужие эмоции становятся важнее твоих.\n"
+            "Ты подстраиваешься и терпишь.\n\n"
+            "Это постепенно тебя разрушает."
+        )
+
     else:
-        return "🔴 Высокий уровень созависимости. Рекомендуется обратить внимание на свои границы или обратиться к психологу."
+        return (
+            "🔴 Ты живёшь чужой жизнью.\n\n"
+            "Пытаешься контролировать и спасать.\n"
+            "Но по факту — разрушаешь себя.\n\n"
+            "И остановиться уже сложно."
+        )
 
 # -----------------------
-# Запуск бота
+# Запуск
 # -----------------------
 async def main():
     await dp.start_polling(bot)
