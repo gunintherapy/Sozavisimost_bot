@@ -123,7 +123,7 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
         kb = InlineKeyboardBuilder()
         kb.button(
             text="💬 Разобрать мою ситуацию",
-            url="https://t.me/gunintherapy"
+            url="https://t.me/voshodkrsk"
         )
         kb.button(
             text="📊 Пройти тест снова",
